@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const crypto = require("crypto");
+const bcrypt = require("bcrypt");
 
 const { db } = require("../../../db.js");
 
@@ -9,29 +9,17 @@ router.post("/api/auth/signup", async (req, res) => {
         return res.status(400).json({ message: "Missing parameters" });
     }
 
-    const user = await db.collection("users").findOne({
-        email: req.body.email,
-    });
+    const email = req.body.email;
+    const password = req.body.password;
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    if (user) {
+    if (db.collection("users").findOne({ email })) {
         return res.status(400).json({ message: "User already exists" });
     }
 
-    const salt = crypto.randomBytes(16).toString("hex");
+    db.collection("users").insertOne({ email, password: hashedPassword });
 
-    const hash = crypto.pbkdf2Sync(req.body.password, salt, 1000, 64, "sha512");
-
-    const newUser = {
-        email: req.body.email,
-        password: hash.toString("hex"),
-        salt: salt,
-    };
-
-    const collection = db.collection("users");
-
-    await collection.insertOne(newUser);
-
-    res.json({ message: "User created" });
+    return res.status(201).json({ message: "User created" });
 });
 
 module.exports = router;

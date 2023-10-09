@@ -3,8 +3,6 @@ const cors = require("cors");
 const bodyParser = require("body-parser");
 const jwt = require("jsonwebtoken");
 
-const { secretKey } = require("./db.json");
-
 const app = express();
 const port = 4000;
 
@@ -27,48 +25,15 @@ app.use(
     })
 );
 
-/* 
-
-UNPROTECTED ROUTES
-
-*/
-
 const signupRoute = require("./routes/api/auth/signup");
 app.post("/api/auth/signup", signupRoute);
-/*
+
 const loginRoute = require("./routes/api/auth/login");
 app.post("/api/auth/login", loginRoute);
-*/
-/* 
 
-PROTECTED ROUTES
-
-*/
-
-const authenticateJWT = (req, res, next) => {
-    const token = req.header("Authorization");
-
-    if (!token) {
-        return res
-            .status(401)
-            .json({ message: "Authentication tokens required" });
-    }
-
-    jwt.verify(token, secretKey, (err, decoded) => {
-        if (err) {
-            return res
-                .status(401)
-                .json({ message: "Invalid authentication tokens" });
-        }
-
-        req.user = decoded;
-        next();
-    });
-};
-/*
 const booksRoute = require("./routes/api/books");
 app.all("/api/books", booksRoute);
-*/
+
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
 });
