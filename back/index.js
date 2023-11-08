@@ -1,7 +1,6 @@
 const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
-const jwt = require("jsonwebtoken");
 
 const app = express();
 const port = 4000;
@@ -26,13 +25,15 @@ app.use(
 );
 
 const signupRoute = require("./routes/api/auth/signup");
-app.post("/api/auth/signup", signupRoute);
+app.use("/api/auth/signup", signupRoute);
 
 const loginRoute = require("./routes/api/auth/login");
-app.post("/api/auth/login", loginRoute);
+app.use("/api/auth/login", loginRoute);
 
 const booksRoute = require("./routes/api/books");
-app.all("/api/books", booksRoute);
+app.use("/api/books", booksRoute);
+
+app.use("/uploads", express.static("./uploads"));
 
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);

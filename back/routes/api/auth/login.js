@@ -3,10 +3,9 @@ const router = express.Router();
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 
-const { db } = require("../../../db.js");
-const { secretKey } = require("../../../db.json");
+const { db, secretKey } = require("../../../db.js");
 
-router.post("/api/auth/login", async (req, res) => {
+router.post("/", async (req, res) => {
     if (!req.body.email || !req.body.password) {
         return res.status(400).json({ message: "Missing parameters" });
     }
@@ -14,7 +13,7 @@ router.post("/api/auth/login", async (req, res) => {
     const email = req.body.email;
     const password = req.body.password;
 
-    const user = await db.collection("users").findOne({ email });
+    const user = await db.Users.findOne({ email: email });
 
     if (!user) {
         return res.status(400).json({ message: "User does not exist" });
