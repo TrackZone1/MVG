@@ -4,19 +4,25 @@ const jwt = require("jsonwebtoken");
 const fs = require("fs");
 const multer = require("multer");
 const { v4 } = require("uuid");
+const sharp = require("sharp");
+
+const { db, secretKey } = require("../../db.js");
 
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         cb(null, "./uploads/");
     },
     filename: function (req, file, cb) {
-        cb(null, v4() + ".png");
+        const ext = file.mimetype.split("/").pop();
+        if (!["jpg", "jpeg", "png"].includes(ext)) {
+            return cb(new Error("Only images are allowed"));
+        }
+
+        cb(null, "tmp-" + v4() + "." + ext);
     },
 });
 
 const upload = multer({ storage });
-
-const { db, secretKey } = require("../../db.js");
 
 const authenticateJWT = (req, res, next) => {
     const token = req.header("Authorization");
@@ -48,12 +54,19 @@ router.get("/", async (req, res) => {
 
 router.get("/bestrating", async (req, res) => {
     const books = await db.Books.find().sort({ averageRating: -1 }).limit(3);
-
     return res.json(books);
 });
 
 router.get("/:id", async (req, res) => {
+    if (!req.params.id) {
+        return res.status(400).json({ message: "Missing parameters" });
+    }
+
     const book = await db.Books.findOne({ _id: req.params.id });
+
+    if (!book) {
+        return res.status(404).json({ message: "Not found" });
+    }
 
     return res.json(book);
 });
@@ -63,11 +76,20 @@ router.post("/", authenticateJWT, upload.single("image"), async (req, res) => {
         return res.status(400).json({ message: "Missing parameters" });
     }
 
-    const book = JSON.parse(req.body.book);
-    const imageUrl = `http://${req.get("host")}/uploads/${req.file.filename}`;
-    const userId = req.user.id;
+    const resizeFilename = req.file.filename.split("tmp-")[1];
 
-    console.log(book, imageUrl, userId);
+    sharp(`./uploads/${req.file.filename}`)
+        .resize(400, 600, { withoutEnlargement: true })
+        .toFile(`./uploads/${resizeFilename}`, (err, info) => {
+            if (err) {
+                return res.status(400).json({ message: err.message });
+            }
+            fs.unlinkSync(`./uploads/${req.file.filename}`);
+        });
+
+    const book = JSON.parse(req.body.book);
+    const imageUrl = `http://${req.get("host")}/uploads/${resizeFilename}`;
+    const userId = req.user.id;
 
     db.Books.create({
         userId,
@@ -80,9 +102,9 @@ router.post("/", authenticateJWT, upload.single("image"), async (req, res) => {
         averageRating: book.averageRating,
     }).catch((err) => {
         try {
-            fs.unlinkSync(`./uploads/${req.file.filename}`);
+            fs.unlinkSync(`./uploads/${resizeFilename}`);
         } catch (err) {
-            console.log(err);
+            return res.status(400).json({ message: err.message });
         }
         return res.status(400).json({ message: err.message });
     });
@@ -102,6 +124,10 @@ router.put(
         const book = JSON.parse(req.body.book);
         const userId = req.user.id;
 
+        if (book.userId !== userId) {
+            return res.status(403).json({ message: "Unauthorized request" });
+        }
+
         if (req.file) {
             const oldBook = await db.Books.findOne({ _id: req.params.id });
             const filename = oldBook.imageUrl.split("/").pop();
@@ -109,7 +135,7 @@ router.put(
             try {
                 fs.unlinkSync(`./uploads/${filename}`);
             } catch (err) {
-                console.log(err);
+                return res.status(400).json({ message: err.message });
             }
 
             const imageUrl = `http://${req.get("host")}/uploads/${
@@ -133,7 +159,7 @@ router.put(
                 try {
                     fs.unlinkSync(`./uploads/${req.file.filename}`);
                 } catch (err) {
-                    console.log(err);
+                    return res.status(400).json({ message: err.message });
                 }
                 return res.status(400).json({ message: err.message });
             });
@@ -154,7 +180,7 @@ router.put(
                 try {
                     fs.unlinkSync(`./uploads/${req.file.filename}`);
                 } catch (err) {
-                    console.log(err);
+                    return res.status(400).json({ message: err.message });
                 }
                 return res.status(400).json({ message: err.message });
             });
@@ -166,14 +192,17 @@ router.put(
 
 router.delete("/:id", authenticateJWT, async (req, res) => {
     const userId = req.user.id;
-
     const book = await db.Books.findOne({ _id: req.params.id });
+
+    if (book.userId !== userId) {
+        return res.status(403).json({ message: "Unauthorized request" });
+    }
 
     const filename = book.imageUrl.split("/").pop();
     try {
         fs.unlinkSync(`./uploads/${filename}`);
     } catch (err) {
-        console.log(err);
+        return res.status(400).json({ message: err.message });
     }
 
     if (!book) {
@@ -190,7 +219,35 @@ router.delete("/:id", authenticateJWT, async (req, res) => {
 });
 
 router.post("/:id/rating", authenticateJWT, async (req, res) => {
-    // NOT IMPLEMENTED
+    if (!req.body.rating) {
+        return res.status(400).json({ message: "Missing parameters" });
+    }
+
+    const rating = req.body.rating;
+    const userId = req.user.id;
+
+    if (rating < 0 || rating > 5) {
+        return res.status(400).json({ message: "Invalid rating" });
+    }
+
+    const book = await db.Books.findOne({ _id: req.params.id });
+
+    if (!book) {
+        return res.status(400).json({ message: "Book not found" });
+    }
+
+    const userRating = book.ratings.find((r) => r.userId === userId);
+
+    if (userRating) {
+        return res.status(400).json({ message: "Rating already exists" });
+    }
+
+    book.ratings.push({ userId, grade: rating });
+    book.averageRating =
+        book.ratings.reduce((acc, r) => acc + r.grade, 0) / book.ratings.length;
+    await book.save();
+
+    return res.status(200).json(book);
 });
 
 module.exports = router;
