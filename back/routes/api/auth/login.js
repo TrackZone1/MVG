@@ -13,7 +13,9 @@ router.post("/", async (req, res) => {
     const email = req.body.email;
     const password = req.body.password;
 
-    const user = await db.Users.findOne({ email: email });
+    const user = await db.Users.findOne({ email: email }).catch((err) => {
+        return res.status(400).json({ message: err.message });
+    });
 
     if (!user) {
         return res.status(400).json({ message: "User does not exist" });

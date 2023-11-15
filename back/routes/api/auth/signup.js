@@ -18,7 +18,9 @@ router.post("/", async (req, res) => {
         return res.status(400).json({ message: "Email already exists" });
     }
 
-    db.Users.create({ email, password: hashedPassword });
+    db.Users.create({ email, password: hashedPassword }).catch((err) => {
+        return res.status(400).json({ message: err.message });
+    });
 
     return res.status(201).json({ message: "User created" });
 });

@@ -47,13 +47,20 @@ const authenticateJWT = (req, res, next) => {
 };
 
 router.get("/", async (req, res) => {
-    const books = await db.Books.find();
+    const books = await db.Books.find().catch((err) => {
+        return res.status(400).json({ message: err.message });
+    });
 
     return res.json(books);
 });
 
 router.get("/bestrating", async (req, res) => {
-    const books = await db.Books.find().sort({ averageRating: -1 }).limit(3);
+    const books = await db.Books.find()
+        .sort({ averageRating: -1 })
+        .limit(3)
+        .catch((err) => {
+            return res.status(400).json({ message: err.message });
+        });
     return res.json(books);
 });
 
@@ -62,7 +69,9 @@ router.get("/:id", async (req, res) => {
         return res.status(400).json({ message: "Missing parameters" });
     }
 
-    const book = await db.Books.findOne({ _id: req.params.id });
+    const book = await db.Books.findOne({ _id: req.params.id }).catch((err) => {
+        return res.status(400).json({ message: err.message });
+    });
 
     if (!book) {
         return res.status(404).json({ message: "Not found" });
@@ -129,7 +138,11 @@ router.put(
         }
 
         if (req.file) {
-            const oldBook = await db.Books.findOne({ _id: req.params.id });
+            const oldBook = await db.Books.findOne({
+                _id: req.params.id,
+            }).catch((err) => {
+                return res.status(400).json({ message: err.message });
+            });
             const filename = oldBook.imageUrl.split("/").pop();
 
             try {
@@ -192,7 +205,9 @@ router.put(
 
 router.delete("/:id", authenticateJWT, async (req, res) => {
     const userId = req.user.id;
-    const book = await db.Books.findOne({ _id: req.params.id });
+    const book = await db.Books.findOne({ _id: req.params.id }).catch((err) => {
+        return res.status(400).json({ message: err.message });
+    });
 
     if (book.userId !== userId) {
         return res.status(403).json({ message: "Unauthorized request" });
@@ -213,7 +228,9 @@ router.delete("/:id", authenticateJWT, async (req, res) => {
         return res.status(403).json({ message: "Unauthorized request" });
     }
 
-    await db.Books.deleteOne({ _id: req.params.id });
+    await db.Books.deleteOne({ _id: req.params.id }).catch((err) => {
+        return res.status(400).json({ message: err.message });
+    });
 
     return res.status(200).json({ message: "Book Deleted" });
 });
@@ -230,7 +247,9 @@ router.post("/:id/rating", authenticateJWT, async (req, res) => {
         return res.status(400).json({ message: "Invalid rating" });
     }
 
-    const book = await db.Books.findOne({ _id: req.params.id });
+    const book = await db.Books.findOne({ _id: req.params.id }).catch((err) => {
+        return res.status(400).json({ message: err.message });
+    });
 
     if (!book) {
         return res.status(400).json({ message: "Book not found" });
@@ -245,7 +264,9 @@ router.post("/:id/rating", authenticateJWT, async (req, res) => {
     book.ratings.push({ userId, grade: rating });
     book.averageRating =
         book.ratings.reduce((acc, r) => acc + r.grade, 0) / book.ratings.length;
-    await book.save();
+    await book.save().catch((err) => {
+        return res.status(400).json({ message: err.message });
+    });
 
     return res.status(200).json(book);
 });
