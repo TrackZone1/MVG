@@ -126,8 +126,16 @@ router.put(
     authenticateJWT,
     upload.single("image"),
     async (req, res) => {
-        if (!req.body.book) {
-            return res.status(400).json({ message: "Missing parameters" });
+        if (!req.file) {
+            if (
+                req.body.title === undefined ||
+                req.body.author === undefined ||
+                req.body.year === undefined ||
+                req.body.genre === undefined
+            ) {
+                return res.status(400).json({ message: "Missing parameters" });
+            }
+            req.body.book = JSON.stringify(req.body);
         }
 
         const book = JSON.parse(req.body.book);
