@@ -88,7 +88,7 @@ router.post("/", authenticateJWT, upload.single("image"), async (req, res) => {
     const resizeFilename = req.file.filename.split("tmp-")[1];
 
     sharp(`./uploads/${req.file.filename}`)
-        .resize(400, 600, { withoutEnlargement: true })
+        .resize(400, 600)
         .toFile(`./uploads/${resizeFilename}`, (err, info) => {
             if (err) {
                 return res.status(400).json({ message: err.message });
@@ -118,11 +118,11 @@ router.post("/", authenticateJWT, upload.single("image"), async (req, res) => {
                 if (err) {
                     if (err.code === "EBUSY") {
                         console.error(
-                            "File is busy or locked, will retry in 5 seconds..."
+                            "File is busy or locked, will retry in 10 seconds..."
                         );
                         setTimeout(
                             () => fs.unlinkSync(`./uploads/${resizeFilename}`),
-                            5000
+                            10 * 1000
                         );
                     } else {
                         console.error("Error deleting file:", err);
@@ -173,9 +173,20 @@ router.put(
                 return res.status(400).json({ message: err.message });
             }
 
-            const imageUrl = `http://${req.get("host")}/uploads/${
-                req.file.filename
-            }`;
+            const resizeFilename = req.file.filename.split("tmp-")[1];
+
+            sharp(`./uploads/${req.file.filename}`)
+                .resize(400, 600)
+                .toFile(`./uploads/${resizeFilename}`, (err, info) => {
+                    if (err) {
+                        return res.status(400).json({ message: err.message });
+                    }
+                    fs.unlinkSync(`./uploads/${req.file.filename}`);
+                });
+
+            const imageUrl = `http://${req.get(
+                "host"
+            )}/uploads/${resizeFilename}`;
 
             db.Books.updateOne(
                 { _id: req.params.id, userId },
@@ -196,7 +207,26 @@ router.put(
                 })
                 .catch((err) => {
                     try {
-                        fs.unlinkSync(`./uploads/${req.file.filename}`);
+                        fs.unlink(`./uploads/${resizeFilename}`, (err) => {
+                            if (err) {
+                                if (err.code === "EBUSY") {
+                                    console.error(
+                                        "File is busy or locked, will retry in 10 seconds..."
+                                    );
+                                    setTimeout(
+                                        () =>
+                                            fs.unlinkSync(
+                                                `./uploads/${resizeFilename}`
+                                            ),
+                                        10 * 1000
+                                    );
+                                } else {
+                                    console.error("Error deleting file:", err);
+                                }
+                            } else {
+                                console.log("File deleted successfully");
+                            }
+                        });
                         return res.status(400).json({ message: err.message });
                     } catch (err) {
                         return res.status(400).json({ message: err.message });
