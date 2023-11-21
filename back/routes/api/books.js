@@ -100,27 +100,39 @@ router.post("/", authenticateJWT, upload.single("image"), async (req, res) => {
     const imageUrl = `http://${req.get("host")}/uploads/${resizeFilename}`;
     const userId = req.user.id;
 
-    try {
-        db.Books.create({
-            userId,
-            title: book.title,
-            author: book.author,
-            imageUrl,
-            year: book.year,
-            genre: book.genre,
-            ratings: book.ratings,
-            averageRating: book.averageRating,
-        });
-
-        return res.status(200).json({ message: "Book Created" });
-    } catch (err) {
-        try {
-            fs.unlinkSync(`./uploads/${req.file.filename}`);
-        } catch (err) {
+    db.Books.create({
+        userId,
+        title: book.title,
+        author: book.author,
+        imageUrl,
+        year: book.year,
+        genre: book.genre,
+        ratings: book.ratings,
+        averageRating: book.averageRating,
+    })
+        .then(() => {
+            return res.status(200).json({ message: "Book Created" });
+        })
+        .catch((err) => {
+            fs.unlink(`./uploads/${resizeFilename}`, (err) => {
+                if (err) {
+                    if (err.code === "EBUSY") {
+                        console.error(
+                            "File is busy or locked, will retry in 5 seconds..."
+                        );
+                        setTimeout(
+                            () => fs.unlinkSync(`./uploads/${resizeFilename}`),
+                            5000
+                        );
+                    } else {
+                        console.error("Error deleting file:", err);
+                    }
+                } else {
+                    console.log("File deleted successfully");
+                }
+            });
             return res.status(400).json({ message: err.message });
-        }
-        return res.status(400).json({ message: err.message });
-    }
+        });
 });
 
 router.put(
@@ -135,7 +147,7 @@ router.put(
                 req.body.year === "" ||
                 req.body.genre === ""
             ) {
-                return res.status(400).json({ error: "Missing parameters" });
+                return res.status(400).json({ message: "Missing parameters" });
             }
             req.body.book = JSON.stringify(req.body);
         }
@@ -178,14 +190,18 @@ router.put(
                         averageRating: book.averageRating,
                     },
                 }
-            ).catch((err) => {
-                try {
-                    fs.unlinkSync(`./uploads/${req.file.filename}`);
-                    return res.status(400).json({ message: err.message });
-                } catch (err) {
-                    return res.status(400).json({ message: err.message });
-                }
-            });
+            )
+                .then(() => {
+                    return res.status(200).json({ message: "Book Updated" });
+                })
+                .catch((err) => {
+                    try {
+                        fs.unlinkSync(`./uploads/${req.file.filename}`);
+                        return res.status(400).json({ message: err.message });
+                    } catch (err) {
+                        return res.status(400).json({ message: err.message });
+                    }
+                });
         } else {
             db.Books.updateOne(
                 { _id: req.params.id, userId },
@@ -199,12 +215,14 @@ router.put(
                         averageRating: book.averageRating,
                     },
                 }
-            ).catch((err) => {
-                return res.status(400).json({ message: err.message });
-            });
+            )
+                .then(() => {
+                    return res.status(200).json({ message: "Book Updated" });
+                })
+                .catch((err) => {
+                    return res.status(400).json({ message: err.message });
+                });
         }
-
-        return res.status(200).json({ message: "Book Updated" });
     }
 );
 
