@@ -18,7 +18,7 @@ const storage = multer.diskStorage({
             return cb(new Error("Only images are allowed"));
         }
 
-        cb(null, "tmp-" + v4() + "." + ext);
+        cb(null, "tmp-" + v4() + ".webp");
     },
 });
 
@@ -100,25 +100,27 @@ router.post("/", authenticateJWT, upload.single("image"), async (req, res) => {
     const imageUrl = `http://${req.get("host")}/uploads/${resizeFilename}`;
     const userId = req.user.id;
 
-    db.Books.create({
-        userId,
-        title: book.title,
-        author: book.author,
-        imageUrl,
-        year: book.year,
-        genre: book.genre,
-        ratings: book.ratings,
-        averageRating: book.averageRating,
-    }).catch((err) => {
+    try {
+        db.Books.create({
+            userId,
+            title: book.title,
+            author: book.author,
+            imageUrl,
+            year: book.year,
+            genre: book.genre,
+            ratings: book.ratings,
+            averageRating: book.averageRating,
+        });
+
+        return res.status(200).json({ message: "Book Created" });
+    } catch (err) {
         try {
-            fs.unlinkSync(`./uploads/${resizeFilename}`);
+            fs.unlinkSync(`./uploads/${req.file.filename}`);
         } catch (err) {
             return res.status(400).json({ message: err.message });
         }
         return res.status(400).json({ message: err.message });
-    });
-
-    return res.status(200).json({ message: "Book Created" });
+    }
 });
 
 router.put(
@@ -128,12 +130,12 @@ router.put(
     async (req, res) => {
         if (!req.file) {
             if (
-                req.body.title === undefined ||
-                req.body.author === undefined ||
-                req.body.year === undefined ||
-                req.body.genre === undefined
+                req.body.title === "" ||
+                req.body.author === "" ||
+                req.body.year === "" ||
+                req.body.genre === ""
             ) {
-                return res.status(400).json({ message: "Missing parameters" });
+                return res.status(400).json({ error: "Missing parameters" });
             }
             req.body.book = JSON.stringify(req.body);
         }
@@ -179,10 +181,10 @@ router.put(
             ).catch((err) => {
                 try {
                     fs.unlinkSync(`./uploads/${req.file.filename}`);
+                    return res.status(400).json({ message: err.message });
                 } catch (err) {
                     return res.status(400).json({ message: err.message });
                 }
-                return res.status(400).json({ message: err.message });
             });
         } else {
             db.Books.updateOne(
@@ -198,11 +200,6 @@ router.put(
                     },
                 }
             ).catch((err) => {
-                try {
-                    fs.unlinkSync(`./uploads/${req.file.filename}`);
-                } catch (err) {
-                    return res.status(400).json({ message: err.message });
-                }
                 return res.status(400).json({ message: err.message });
             });
         }
